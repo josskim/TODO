@@ -59,6 +59,7 @@ function TrashIcon() {
 export default function Home() {
   const [deviceId, setDeviceId] = useState("");
   const [todos, setTodos] = useState<Todo[]>([]);
+  const [loadError, setLoadError] = useState("");
   const [input, setInput] = useState("");
   const [selectedCategory, setSelectedCategory] =
     useState<TodoCategory>("ETC");
@@ -69,24 +70,42 @@ export default function Home() {
   const [confirmId, setConfirmId] = useState<number | null>(null);
 
   useEffect(() => {
-    let id = localStorage.getItem("device_id");
-    if (!id) {
-      id = crypto.randomUUID();
-      localStorage.setItem("device_id", id);
+    try {
+      let id = localStorage.getItem("device_id");
+      if (!id) {
+        id =
+          typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        localStorage.setItem("device_id", id);
+      }
+      setDeviceId(id);
+      fetchTodos(id);
+    } catch (err) {
+      console.error(err);
+      setLoadError("기기 정보를 불러오지 못했습니다.");
+      setIsLoading(false);
     }
-    setDeviceId(id);
-    fetchTodos(id);
   }, []);
 
   async function fetchTodos(id: string) {
     try {
+      setLoadError("");
       const res = await fetch("/api/todos", {
         headers: { "X-Device-Id": id },
       });
-      const data: Todo[] = await res.json();
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error((data as { error?: string } | null)?.error ?? "Failed to fetch todos");
+      }
+      if (!Array.isArray(data)) {
+        throw new Error("Invalid todos response");
+      }
       setTodos(data);
     } catch (err) {
       console.error(err);
+      setTodos([]);
+      setLoadError("할 일을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
     } finally {
       setIsLoading(false);
     }
@@ -248,6 +267,11 @@ export default function Home() {
 
         {/* List */}
         <div className="rounded-2xl bg-slate-50 p-4 shadow-inner border border-slate-100">
+          {loadError && (
+            <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {loadError}
+            </div>
+          )}
           {isLoading ? (
             <div className="py-10 text-center">Loading...</div>
           ) : (
