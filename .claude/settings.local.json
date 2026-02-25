@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx create-next-app@latest:*)",
+      "Bash(PGPASSWORD='hare2580@@' \"/c/Program Files/PostgreSQL/18/bin/createdb.exe\":*)",
+      "Bash(PGPASSWORD='hare2580@@' \"/c/Program Files/PostgreSQL/18/bin/psql.exe\" -U postgres -c \"\\\\l todo\")",
+      "Bash(npx tsc:*)",
+      "Bash(npm run dev:*)",
+      "Bash(tasklist:*)"
+    ],
+    "additionalDirectories": [
+      "C:\\taxi\\image"
+    ]
+  }
+}
