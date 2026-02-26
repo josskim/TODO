@@ -69,23 +69,45 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true);
   const [confirmId, setConfirmId] = useState<number | null>(null);
 
-  useEffect(() => {
+  function generateDeviceId() {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
+  function ensureDeviceId() {
+    if (deviceId) return deviceId;
+
+    const nextId = generateDeviceId();
+    setDeviceId(nextId);
     try {
-      let id = localStorage.getItem("device_id");
-      if (!id) {
-        id =
-          typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-            ? crypto.randomUUID()
-            : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-        localStorage.setItem("device_id", id);
-      }
-      setDeviceId(id);
-      fetchTodos(id);
+      localStorage.setItem("device_id", nextId);
     } catch (err) {
       console.error(err);
-      setLoadError("기기 정보를 불러오지 못했습니다.");
-      setIsLoading(false);
     }
+    return nextId;
+  }
+
+  useEffect(() => {
+    let id = "";
+    try {
+      id = localStorage.getItem("device_id") ?? "";
+    } catch (err) {
+      console.error(err);
+    }
+
+    if (!id) {
+      id = generateDeviceId();
+      try {
+        localStorage.setItem("device_id", id);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    setDeviceId(id);
+    fetchTodos(id);
   }, []);
 
   async function fetchTodos(id: string) {
@@ -113,12 +135,13 @@ export default function Home() {
 
   async function addTodo() {
     const trimmed = input.trim();
-    if (!trimmed || !deviceId) return;
+    if (!trimmed) return;
+    const currentDeviceId = ensureDeviceId();
 
     try {
       const res = await fetch("/api/todos", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Device-Id": deviceId },
+        headers: { "Content-Type": "application/json", "X-Device-Id": currentDeviceId },
         body: JSON.stringify({ title: trimmed, category: selectedCategory }),
       });
 
