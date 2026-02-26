@@ -60,6 +60,7 @@ export default function Home() {
   const [deviceId, setDeviceId] = useState("");
   const [todos, setTodos] = useState<Todo[]>([]);
   const [loadError, setLoadError] = useState("");
+  const [localMode, setLocalMode] = useState(false);
   const [input, setInput] = useState("");
   const [selectedCategory, setSelectedCategory] =
     useState<TodoCategory>("ETC");
@@ -87,6 +88,32 @@ export default function Home() {
       console.error(err);
     }
     return nextId;
+  }
+
+  function localTodosKey(id: string) {
+    return `todos_local_${id}`;
+  }
+
+  function readLocalTodos(id: string): Todo[] {
+    if (!id) return [];
+    try {
+      const raw = localStorage.getItem(localTodosKey(id));
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? (parsed as Todo[]) : [];
+    } catch (err) {
+      console.error(err);
+      return [];
+    }
+  }
+
+  function writeLocalTodos(id: string, items: Todo[]) {
+    if (!id) return;
+    try {
+      localStorage.setItem(localTodosKey(id), JSON.stringify(items));
+    } catch (err) {
+      console.error(err);
+    }
   }
 
   useEffect(() => {
@@ -124,10 +151,12 @@ export default function Home() {
         throw new Error("Invalid todos response");
       }
       setTodos(data);
+      setLocalMode(false);
     } catch (err) {
       console.error(err);
-      setTodos([]);
-      setLoadError("할 일을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      setTodos(readLocalTodos(id));
+      setLocalMode(true);
+      setLoadError("서버 연결이 불안정해 로컬 모드로 동작 중입니다.");
     } finally {
       setIsLoading(false);
     }
@@ -149,8 +178,25 @@ export default function Home() {
       const newTodo: Todo = await res.json();
       setTodos((prev) => [newTodo, ...prev]);
       setInput("");
+      setLocalMode(false);
     } catch (err) {
       console.error(err);
+      const now = new Date().toISOString();
+      const localTodo: Todo = {
+        id: Date.now(),
+        title: trimmed,
+        completed: false,
+        category: selectedCategory,
+        createdAt: now,
+        updatedAt: now,
+      };
+      setTodos((prev) => {
+        const next = [localTodo, ...prev];
+        writeLocalTodos(currentDeviceId, next);
+        return next;
+      });
+      setInput("");
+      setLocalMode(true);
     }
   }
 
@@ -165,8 +211,18 @@ export default function Home() {
       if (!res.ok) throw new Error("Failed to update todo");
       const updated: Todo = await res.json();
       setTodos((prev) => prev.map((t) => (t.id === id ? updated : t)));
+      setLocalMode(false);
     } catch (err) {
       console.error(err);
+      const currentDeviceId = ensureDeviceId();
+      setTodos((prev) => {
+        const next = prev.map((t) =>
+          t.id === id ? { ...t, completed: !completed, updatedAt: new Date().toISOString() } : t
+        );
+        writeLocalTodos(currentDeviceId, next);
+        return next;
+      });
+      setLocalMode(true);
     }
   }
 
@@ -178,8 +234,16 @@ export default function Home() {
       });
       if (!res.ok && res.status !== 204) throw new Error("Failed to delete todo");
       setTodos((prev) => prev.filter((t) => t.id !== id));
+      setLocalMode(false);
     } catch (err) {
       console.error(err);
+      const currentDeviceId = ensureDeviceId();
+      setTodos((prev) => {
+        const next = prev.filter((t) => t.id !== id);
+        writeLocalTodos(currentDeviceId, next);
+        return next;
+      });
+      setLocalMode(true);
     }
   }
 
@@ -290,6 +354,11 @@ export default function Home() {
 
         {/* List */}
         <div className="rounded-2xl bg-slate-50 p-4 shadow-inner border border-slate-100">
+          {localMode && (
+            <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+              서버 DB 연결 전이라 현재 기기에만 저장됩니다.
+            </div>
+          )}
           {loadError && (
             <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
               {loadError}
